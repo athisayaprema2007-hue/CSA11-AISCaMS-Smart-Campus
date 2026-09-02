@@ -1,0 +1,145 @@
+{# Shared presentation macros. #}
+
+{% macro metric_cards(metrics) %}
+<div class="metrics">
+    {% for metric in metrics %}
+        <div class="metric tone-{{ metric.tone }}">
+            <div class="metric-label">{{ metric.label }}</div>
+            <div class="metric-value">{{ metric.value }}</div>
+            <div class="metric-hint">{{ metric.hint }}</div>
+        </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro empty(title, hint) %}
+<div class="empty-state">
+    <strong>{{ title }}</strong>
+    <span>{{ hint }}</span>
+</div>
+{% endmacro %}
+
+{% macro status_badge(value) %}
+<span class="badge {{ value }}">{{ value.replace('_', ' ') | title }}</span>
+{% endmacro %}
+
+{% macro sla_badge(request) %}
+<span class="badge {{ request.sla_state }}">{{ request.sla_state.replace('_', ' ') | title }}</span>
+{% endmacro %}
+
+{% macro booking_rows(bookings, show_user=false, actions=true) %}
+<div class="table-wrap">
+    <table class="data">
+        <thead>
+        <tr>
+            <th>Reference</th>
+            <th>Resource</th>
+            {% if show_user %}<th>Booked by</th>{% endif %}
+            <th>Purpose</th>
+            <th>Slot</th>
+            <th class="num">People</th>
+            <th>Status</th>
+            {% if actions %}<th></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for booking in bookings %}
+            <tr>
+                <td class="mono">{{ booking.reference }}</td>
+                <td><strong>{{ booking.resource_code }}</strong><br><small>{{ booking.resource_name }}</small></td>
+                {% if show_user %}<td>{{ booking.user_name }}</td>{% endif %}
+                <td class="col-mid">{{ booking.purpose }}</td>
+                <td class="nowrap">{{ booking.start_display }}<br><small>to {{ booking.end_display }}</small></td>
+                <td class="num">{{ booking.attendees }}</td>
+                <td>{{ status_badge(booking.status) }}</td>
+                {% if actions %}
+                    <td class="right">
+                        {% if booking.status in ['PENDING', 'CONFIRMED'] %}
+                            <button class="btn small danger" data-action="post"
+                                    data-url="/api/bookings/{{ booking.id }}/cancel"
+                                    data-confirm="Cancel booking {{ booking.reference }}?">Cancel</button>
+                        {% endif %}
+                    </td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{% macro request_rows(requests, show_actions=false, technicians=none) %}
+<div class="table-wrap">
+    <table class="data">
+        <thead>
+        <tr>
+            <th>Ticket</th>
+            <th>Issue</th>
+            <th>Resource</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>SLA</th>
+            <th>Assignee</th>
+            {% if show_actions %}<th></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in requests %}
+            <tr>
+                <td class="mono">{{ item.ticket }}</td>
+                <td class="col-wide">
+                    <strong>{{ item.title }}</strong><br>
+                    <small>Raised {{ item.created_display }}{% if item.source == 'IOT' %} by the IoT gateway{% elif item.raised_by_name %} by {{ item.raised_by_name }}{% endif %}</small>
+                </td>
+                <td class="mono">{{ item.resource_code }}</td>
+                <td>{{ item.category_label }}</td>
+                <td>{{ status_badge(item.priority) }}</td>
+                <td>{{ status_badge(item.status) }}</td>
+                <td class="nowrap">
+                    {{ sla_badge(item) }}<br>
+                    <small>{{ item.sla_hours }}h &middot; due {{ item.sla_due_display }}</small>
+                </td>
+                <td>{{ item.assigned_to_name or '-' }}</td>
+                {% if show_actions %}
+                    <td class="right">
+                        {% if technicians and item.status == 'NEW' %}
+                            <form class="btn-row" data-json-form data-url="/api/requests/{{ item.id }}/assign">
+                                <select name="staff_id" style="width:auto;">
+                                    {% for tech in technicians %}
+                                        <option value="{{ tech.id }}">{{ tech.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button class="btn small" type="submit">Assign</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{% macro schedule_rows(classes, today) %}
+<div class="table-wrap">
+    <table class="data">
+        <thead>
+        <tr><th>Day</th><th>Course</th><th>Time</th><th>Room</th><th>Faculty</th><th class="num">Enrolled</th></tr>
+        </thead>
+        <tbody>
+        {% for item in classes %}
+            <tr>
+                <td>{{ item.day_of_week }}{% if item.day_of_week == today %} <span class="badge brand">Today</span>{% endif %}</td>
+                <td><strong>{{ item.course_code }}</strong><br><small>{{ item.course_title }}</small></td>
+                <td class="nowrap">{{ item.time_range }}</td>
+                <td class="mono">{{ item.resource_code }}</td>
+                <td>{{ item.faculty_name }}</td>
+                <td class="num">{{ item.enrolled }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}

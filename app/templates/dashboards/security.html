@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_cards, empty, status_badge %}
+{% block title %}Security dashboard{% endblock %}
+{% block page_title %}Security operations{% endblock %}
+{% block page_subtitle %}Parking occupancy, infrastructure alerts and safety related IoT readings{% endblock %}
+
+{% block content %}
+{{ metric_cards(data.metrics) }}
+
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Parking occupancy</h2>
+                <p class="card-sub">Live values published by the parking sensors</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Zone</th><th>Area</th><th class="num">Occupied</th><th class="num">Free</th><th>Utilisation</th></tr></thead>
+                        <tbody>
+                        {% for area in data.parking.areas %}
+                            <tr>
+                                <td><strong>{{ area.zone }}</strong></td>
+                                <td>{{ area.name }}<br><small class="mono">{{ area.code }} &middot; {{ area.building }}</small></td>
+                                <td class="num">{{ area.occupied_slots }} / {{ area.total_slots }}</td>
+                                <td class="num">{{ area.free_slots }}</td>
+                                <td>
+                                    <div class="progress {{ 'bad' if area.occupancy_rate > 0.9 else ('warn' if area.occupancy_rate > 0.75 else 'good') }}">
+                                        <span style="width: {{ (area.occupancy_rate * 100) | round(0, 'floor') }}%"></span>
+                                    </div>
+                                    <small>{{ (area.occupancy_rate * 100) | round(0, 'floor') }}%</small>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Infrastructure and safety alerts</h2>
+                <p class="card-sub">Raised automatically from critical IoT readings</p>
+            </div>
+            <div class="card-body tight">
+                {% if data.alerts %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Resource</th><th>Alert</th><th>Severity</th><th>Ticket</th><th>Status</th><th></th></tr></thead>
+                            <tbody>
+                            {% for alert in data.alerts %}
+                                <tr>
+                                    <td class="mono">{{ alert.resource_code }}</td>
+                                    <td>{{ alert.message }}<br><small>{{ alert.created_at }}</small></td>
+                                    <td>{{ status_badge(alert.severity) }}</td>
+                                    <td class="mono">{{ alert.request_ticket or '-' }}</td>
+                                    <td>{{ status_badge(alert.status) }}</td>
+                                    <td class="right">
+                                        {% if alert.status == 'OPEN' %}
+                                            <button class="btn small" data-action="post"
+                                                    data-url="/api/alerts/{{ alert.id }}/acknowledge">Acknowledge</button>
+                                        {% else %}
+                                            <small class="muted">by {{ alert.acknowledged_by_name or 'security' }}</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No active alerts', 'Campus infrastructure is operating within the safe thresholds.') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Latest IoT readings</h2>
+                <p class="card-sub">Newest value of every device</p>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.iot') }}">Full monitoring</a>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Device</th><th>Metric</th><th>Value</th><th>Severity</th></tr></thead>
+                        <tbody>
+                        {% for reading in data.readings %}
+                            <tr>
+                                <td class="mono">{{ reading.device_code }}<br><small>{{ reading.resource_code }}</small></td>
+                                <td>{{ reading.metric_label }}</td>
+                                <td class="strong">{{ reading.display_value }}</td>
+                                <td>{{ status_badge(reading.severity) }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

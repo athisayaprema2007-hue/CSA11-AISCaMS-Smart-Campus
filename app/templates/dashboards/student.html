@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_cards, empty, status_badge, booking_rows %}
+{% block title %}Student dashboard{% endblock %}
+{% block page_title %}Welcome back, {{ current_user.full_name.split(' ')[0] }}{% endblock %}
+{% block page_subtitle %}Student dashboard &middot; {{ current_user.department }} &middot; timetable, bookings, requests and campus services</p>{% endblock %}
+
+{% block content %}
+{{ metric_cards(data.metrics) }}
+
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Today's classes</h2>
+                <p class="card-sub">{{ today }} &middot; {{ data.today_classes | length }} session(s)</p>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.schedule') }}">Full timetable</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.today_classes %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Time</th><th>Course</th><th>Room</th><th>Faculty</th></tr></thead>
+                            <tbody>
+                            {% for item in data.today_classes %}
+                                <tr>
+                                    <td class="nowrap strong">{{ item.time_range }}</td>
+                                    <td><strong>{{ item.course_code }}</strong><br><small>{{ item.course_title }}</small></td>
+                                    <td class="mono">{{ item.resource_code }}<br><small>{{ item.resource_name }}</small></td>
+                                    <td>{{ item.faculty_name }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No classes scheduled today', 'Your next sessions are listed in the academic schedule.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>My upcoming bookings</h2>
+                <p class="card-sub">Rooms and laboratories reserved by you</p>
+                <span class="spacer"></span>
+                <a class="btn small" href="{{ url_for('views.recommendations') }}">Find a room</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.bookings %}
+                    {{ booking_rows(data.bookings) }}
+                {% else %}
+                    {{ empty('No upcoming bookings', 'Use smart recommendations to reserve a suitable space.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>My service requests</h2>
+                <p class="card-sub">Automatically classified with a priority and an SLA</p>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.requests_page') }}">Track all</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.requests %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Ticket</th><th>Issue</th><th>Priority</th><th>Status</th><th>SLA due</th></tr></thead>
+                            <tbody>
+                            {% for item in data.requests %}
+                                <tr>
+                                    <td class="mono">{{ item.ticket }}</td>
+                                    <td class="col-wide">{{ item.title }}<br><small>{{ item.resource_code }} &middot; {{ item.category_label }}</small></td>
+                                    <td>{{ status_badge(item.priority) }}</td>
+                                    <td>{{ status_badge(item.status) }}</td>
+                                    <td class="nowrap"><small>{{ item.sla_due_display }}</small></td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No service requests raised', 'Report a campus issue and track its progress here.') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Attendance</h2>
+                <p class="card-sub">Across every enrolled course</p>
+            </div>
+            <div class="card-body">
+                <div style="display:flex;align-items:center;gap:1rem;">
+                    <div style="font-size:2.1rem;font-weight:700;">{{ data.attendance.percentage }}%</div>
+                    <div style="flex:1;">
+                        <div class="progress {{ 'good' if data.attendance.percentage >= 75 else 'warn' }}">
+                            <span style="width: {{ data.attendance.percentage }}%"></span>
+                        </div>
+                        <small>{{ data.attendance.present }} present of {{ data.attendance.sessions }} recorded sessions</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Upcoming campus events</h2>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.events') }}">All events</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.events %}
+                    {% for event in data.events %}
+                        <div class="stat-row">
+                            <span>
+                                <strong>{{ event.title }}</strong><br>
+                                <small>{{ event.start_display }} &middot; {{ event.venue_code or 'Campus' }}</small>
+                            </span>
+                            <span>
+                                {% if event.registered %}<span class="badge success">Registered</span>
+                                {% else %}<span class="badge neutral">{{ event.seats_left }} seats</span>{% endif %}
+                            </span>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    {{ empty('No upcoming events', 'Check back later for campus activities.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Digital campus services</h2>
+                <p class="card-sub">Self service portals</p>
+            </div>
+            <div class="card-body tight">
+                {% for service in data.digital_services %}
+                    <div class="stat-row">
+                        <span><strong>{{ service.name }}</strong><br><small>{{ service.description }}</small></span>
+                        <span class="badge {{ 'success' if service.is_online else 'danger' }}">
+                            {{ 'Online' if service.is_online else 'Offline' }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Recent notifications</h2>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.notifications') }}">Open</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.notifications %}
+                    <ul class="timeline">
+                        {% for note in data.notifications %}
+                            <li>
+                                <strong>{{ note.title }}</strong>
+                                {{ note.message }}
+                                <span>{{ note.created_display }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    {{ empty('No notifications yet', 'Booking and request updates appear here.') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

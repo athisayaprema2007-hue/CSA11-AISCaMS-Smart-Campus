@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, status_badge, sla_badge %}
+{% block title %}Service requests{% endblock %}
+{% block page_title %}Service requests{% endblock %}
+{% block page_subtitle %}Report a campus issue and track it; the factory classifies the category, the priority and the SLA automatically{% endblock %}
+
+{% block content %}
+<div class="grid split">
+    <div>
+        {% if can_submit %}
+        <div class="card">
+            <div class="card-header">
+                <h2>Report an issue</h2>
+                <p class="card-sub">Leave the category and priority on automatic to see the classification rules at work</p>
+            </div>
+            <div class="card-body">
+                <form id="request-form">
+                    <div class="form-grid">
+                        <div class="field" style="grid-column: 1 / -1;">
+                            <label for="resource_id">Campus resource</label>
+                            <select id="resource_id" name="resource_id" required>
+                                {% for resource in resources %}
+                                    <option value="{{ resource.id }}">{{ resource.code }} - {{ resource.name }} ({{ resource.building }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field" style="grid-column: 1 / -1;">
+                            <label for="title">Short title</label>
+                            <input type="text" id="title" name="title" maxlength="120" required
+                                   value="Projector not working in the seminar room">
+                        </div>
+                        <div class="field" style="grid-column: 1 / -1;">
+                            <label for="description">What is wrong?</label>
+                            <textarea id="description" name="description" required
+                                      maxlength="1000">The ceiling projector does not switch on and the class cannot continue. Urgent support is required before the next session.</textarea>
+                        </div>
+                        <div class="field">
+                            <label for="category">Category</label>
+                            <select id="category" name="category">
+                                <option value="">Detect automatically</option>
+                                <option value="MAINTENANCE">Maintenance</option>
+                                <option value="SAFETY">Safety</option>
+                                <option value="IT_SUPPORT">IT support</option>
+                                <option value="HOUSEKEEPING">Housekeeping</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="priority">Priority</label>
+                            <select id="priority" name="priority">
+                                <option value="">Detect automatically</option>
+                                {% for priority in priorities %}
+                                    <option value="{{ priority }}">{{ priority | title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Submit request</button>
+                        <span class="muted">Keyword rules choose the category; escalation words raise the priority.</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <div id="request-result"></div>
+
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header"><h3>Classification rules</h3></div>
+            <div class="card-body">
+                <p class="muted" style="font-size:.84rem;">
+                    The service request factory reads the title and the description, selects the
+                    concrete request class and applies that class's SLA matrix.
+                </p>
+                <div class="stat-row"><span>Safety keywords (fire, gas, spark, hazard)</span><span class="badge danger">Safety</span></div>
+                <div class="stat-row"><span>IT keywords (projector, network, computer)</span><span class="badge info">IT support</span></div>
+                <div class="stat-row"><span>Cleaning keywords (clean, waste, spill)</span><span class="badge neutral">Housekeeping</span></div>
+                <div class="stat-row"><span>Everything else</span><span class="badge brand">Maintenance</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h3>Resolution targets (SLA)</h3></div>
+            <div class="card-body">
+                <div class="stat-row"><span>Safety</span><span>1 / 4 / 12 / 24 h</span></div>
+                <div class="stat-row"><span>IT support</span><span>2 / 6 / 16 / 48 h</span></div>
+                <div class="stat-row"><span>Maintenance</span><span>2 / 8 / 24 / 72 h</span></div>
+                <div class="stat-row"><span>Housekeeping</span><span>2 / 8 / 12 / 36 h</span></div>
+                <p class="muted" style="font-size:.79rem;margin-top:.6rem;">
+                    Read as critical / high / medium / low priority.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card" id="my-requests">
+    <div class="card-header">
+        <h2>My requests</h2>
+        <p class="card-sub" id="my-requests-count">{{ requests | length }} ticket(s) raised by you</p>
+    </div>
+    <div class="card-body tight">
+        {% if requests %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                    <tr><th>Ticket</th><th>Issue</th><th>Category</th><th>Priority</th><th>Status</th><th>SLA</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in requests %}
+                        <tr>
+                            <td class="mono">{{ item.ticket }}</td>
+                            <td>
+                                <strong>{{ item.title }}</strong><br>
+                                <small>{{ item.resource_code }} &middot; raised {{ item.created_display }}</small>
+                                {% if item.history %}
+                                    <details style="margin-top:.35rem;">
+                                        <summary class="muted" style="cursor:pointer;font-size:.8rem;">Tracking history</summary>
+                                        <ul class="timeline" style="margin-top:.5rem;">
+                                            {% for entry in item.history %}
+                                                <li>
+                                                    <strong>{{ entry.to_status.replace('_',' ') | title }}</strong>
+                                                    {{ entry.note }}
+                                                    <span>{{ entry.changed_at }}{% if entry.changed_by_name %} &middot; {{ entry.changed_by_name }}{% endif %}</span>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </details>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.category_label }}</td>
+                            <td>{{ status_badge(item.priority) }}</td>
+                            <td>{{ status_badge(item.status) }}</td>
+                            <td class="nowrap">{{ sla_badge(item) }}<br><small>{{ item.sla_hours }}h &middot; {{ item.sla_due_display }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {{ empty('No requests raised yet', 'Submitted requests and their progress will appear here.') }}
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var form = document.getElementById("request-form");
+    if (!form) { return; }
+    var box = document.getElementById("request-result");
+    var esc = window.AISCAMS.escapeHtml;
+
+    /* Matches the server side "Title case" rendering of the status badges. */
+    function title(value) {
+        return esc(String(value).replace(/_/g, " ").toLowerCase()
+            .replace(/\w/g, function (c) { return c.toUpperCase(); }));
+    }
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var button = form.querySelector("[type='submit']");
+        window.AISCAMS.busy(button, true, "Submitting...");
+        window.AISCAMS.postJSON("/api/requests", window.AISCAMS.formValues(form))
+            .then(function (data) {
+                var item = data.request;
+                box.innerHTML =
+                    '<div class="card" style="border-color:var(--success);">' +
+                      '<div class="card-header" style="background:var(--success-soft);">' +
+                        '<h2 style="color:var(--success);">Request ' + esc(item.ticket) + ' created</h2>' +
+                        '<p class="card-sub">' + esc(data.message) + '</p>' +
+                      '</div>' +
+                      '<div class="card-body">' +
+                        '<div class="metrics" style="margin:0;">' +
+                          '<div class="metric tone-primary"><div class="metric-label">Category</div>' +
+                            '<div class="metric-value" style="font-size:1.25rem;">' +
+                              esc(item.category.replace("_", " ")) + '</div>' +
+                            '<div class="metric-hint">' + esc(item.handling_team) + '</div></div>' +
+                          '<div class="metric tone-warning"><div class="metric-label">Priority</div>' +
+                            '<div class="metric-value" style="font-size:1.25rem;">' + esc(item.priority) + '</div>' +
+                            '<div class="metric-hint">Assigned automatically</div></div>' +
+                          '<div class="metric tone-info"><div class="metric-label">SLA</div>' +
+                            '<div class="metric-value" style="font-size:1.25rem;">' + item.sla_hours + ' hours</div>' +
+                            '<div class="metric-hint">Due ' + esc(item.sla_due_display) + '</div></div>' +
+                          '<div class="metric tone-success"><div class="metric-label">Status</div>' +
+                            '<div class="metric-value" style="font-size:1.25rem;">' + esc(item.status) + '</div>' +
+                            '<div class="metric-hint">' + esc(item.resource_code) + ' &middot; ' + esc(item.sla_state.replace("_", " ")) + '</div></div>' +
+                        '</div>' +
+                        '<p class="muted" style="margin-top:.9rem;">The administrator has been notified and can ' +
+                          'assign the ticket to a maintenance technician.</p>' +
+                      '</div>' +
+                    '</div>';
+                window.AISCAMS.toast(data.message, "success");
+                window.AISCAMS.busy(button, false);
+                box.scrollIntoView({ behavior: "smooth", block: "center" });
+                var tbody = document.querySelector("#my-requests table.data tbody");
+                if (tbody) {
+                    var row = document.createElement("tr");
+                    row.innerHTML =
+                        '<td class="mono">' + esc(item.ticket) + '</td>' +
+                        '<td class="col-wide"><strong>' + esc(item.title) + '</strong><br><small>' +
+                            esc(item.resource_code) + ' &middot; raised ' + esc(item.created_display) + '</small></td>' +
+                        '<td>' + esc(item.category_label) + '</td>' +
+                        '<td><span class="badge ' + esc(item.priority) + '">' + title(item.priority) + '</span></td>' +
+                        '<td><span class="badge ' + esc(item.status) + '">' + title(item.status) + '</span></td>' +
+                        '<td class="nowrap"><span class="badge ' + esc(item.sla_state) + '">' +
+                            title(item.sla_state) + '</span><br><small>' + item.sla_hours +
+                            'h &middot; ' + esc(item.sla_due_display) + '</small></td>';
+                    tbody.insertBefore(row, tbody.firstChild);
+                    var counter = document.getElementById("my-requests-count");
+                    if (counter) {
+                        counter.textContent = tbody.rows.length + " ticket(s) raised by you";
+                    }
+                }
+            })
+            .catch(function (error) {
+                window.AISCAMS.toast(error.message, "error");
+                window.AISCAMS.busy(button, false);
+            });
+    });
+}());
+</script>
+{% endblock %}

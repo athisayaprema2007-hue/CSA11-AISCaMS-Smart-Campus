@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, status_badge, sla_badge %}
+{% block title %}Maintenance workflow{% endblock %}
+{% block page_title %}Maintenance workflow{% endblock %}
+{% block page_subtitle %}Work the assigned queue: start the job, resolve it and close it. Only transitions allowed by the state machine are offered{% endblock %}
+
+{% block content %}
+{% set labels = {'ASSIGNED': 'Accept assignment', 'IN_PROGRESS': 'Start work',
+                 'RESOLVED': 'Mark resolved', 'CLOSED': 'Close ticket', 'REJECTED': 'Reject'} %}
+{% set open_items = queue | selectattr('is_open') | list %}
+
+<div class="metrics">
+    <div class="metric tone-primary">
+        <div class="metric-label">Open tickets</div>
+        <div class="metric-value">{{ open_items | length }}</div>
+        <div class="metric-hint">{{ queue | length }} ticket(s) in the queue</div>
+    </div>
+    <div class="metric tone-info">
+        <div class="metric-label">In progress</div>
+        <div class="metric-value">{{ queue | selectattr('status', 'equalto', 'IN_PROGRESS') | list | length }}</div>
+        <div class="metric-hint">Work started on site</div>
+    </div>
+    <div class="metric tone-danger">
+        <div class="metric-label">SLA breached</div>
+        <div class="metric-value">{{ queue | selectattr('sla_state', 'equalto', 'BREACHED') | list | length }}</div>
+        <div class="metric-hint">Past the promised resolution time</div>
+    </div>
+    <div class="metric tone-success">
+        <div class="metric-label">Resolved or closed</div>
+        <div class="metric-value">{{ queue | rejectattr('is_open') | list | length }}</div>
+        <div class="metric-hint">Completed work</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Service request queue</h2>
+        <p class="card-sub">Priority order: critical tickets first, then by age</p>
+    </div>
+    <div class="card-body tight">
+        {% if queue %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                    <tr><th>Ticket</th><th>Issue</th><th>Resource</th><th>Priority</th><th>Status</th><th>SLA</th><th>Workflow</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in queue %}
+                        <tr>
+                            <td class="mono">{{ item.ticket }}<br><small>{{ item.source }}</small></td>
+                            <td class="col-wide">
+                                <strong>{{ item.title }}</strong><br>
+                                <small>{{ item.description[:110] }}{% if item.description | length > 110 %}...{% endif %}</small>
+                                {% if item.history %}
+                                    <details style="margin-top:.35rem;">
+                                        <summary class="muted" style="cursor:pointer;font-size:.79rem;">
+                                            History ({{ item.history | length }})</summary>
+                                        <ul class="timeline" style="margin-top:.45rem;">
+                                            {% for entry in item.history %}
+                                                <li><strong>{{ entry.to_status.replace('_',' ') | title }}</strong>
+                                                    {{ entry.note }}
+                                                    <span>{{ entry.changed_at }}{% if entry.changed_by_name %} &middot; {{ entry.changed_by_name }}{% endif %}</span></li>
+                                            {% endfor %}
+                                        </ul>
+                                    </details>
+                                {% endif %}
+                            </td>
+                            <td class="mono">{{ item.resource_code }}<br><small>{{ item.category_label }}</small></td>
+                            <td>{{ status_badge(item.priority) }}</td>
+                            <td>{{ status_badge(item.status) }}</td>
+                            <td class="nowrap">{{ sla_badge(item) }}<br>
+                                <small>{{ item.sla_hours }}h &middot; due {{ item.sla_due_display }}</small></td>
+                            <td>
+                                {% if item.next_states %}
+                                    <div class="btn-row">
+                                        {% for state in item.next_states %}
+                                            <button class="btn small {{ 'success' if state in ['RESOLVED','CLOSED'] else ('danger' if state == 'REJECTED' else '') }}"
+                                                    data-action="post"
+                                                    data-url="/api/requests/{{ item.id }}/status"
+                                                    data-payload='{"status": "{{ state }}", "note": "Updated from the maintenance workspace"}'>
+                                                {{ labels.get(state, state | title) }}
+                                            </button>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <small class="muted">Lifecycle complete</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {{ empty('Nothing in the queue', 'Requests assigned to you will appear here.') }}
+        {% endif %}
+    </div>
+</div>
+
+{% if can_update_equipment %}
+<div class="card">
+    <div class="card-header">
+        <h2>Update equipment condition</h2>
+        <p class="card-sub">Equipment marked faulty or out of service is excluded from recommendations</p>
+    </div>
+    <div class="card-body">
+        <form data-json-form data-url="/api/equipment/condition">
+            <div class="form-grid">
+                <div class="field">
+                    <label for="resource_id">Resource</label>
+                    <select id="resource_id" name="resource_id" required>
+                        {% for resource in resources %}
+                            <option value="{{ resource.id }}" data-equipment="{{ resource.equipment_codes | join(',') }}">
+                                {{ resource.code }} - {{ resource.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="equipment_code">Equipment</label>
+                    <select id="equipment_code" name="equipment_code" required></select>
+                </div>
+                <div class="field">
+                    <label for="condition">Condition</label>
+                    <select id="condition" name="condition" required>
+                        <option value="GOOD">Good</option>
+                        <option value="FAIR">Fair</option>
+                        <option value="FAULTY">Faulty</option>
+                        <option value="OUT_OF_SERVICE">Out of service</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" type="submit">Save condition</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var resourceSelect = document.getElementById("resource_id");
+    var equipmentSelect = document.getElementById("equipment_code");
+    if (!resourceSelect || !equipmentSelect) { return; }
+
+    function refresh() {
+        var option = resourceSelect.options[resourceSelect.selectedIndex];
+        var codes = (option.dataset.equipment || "").split(",").filter(Boolean);
+        equipmentSelect.innerHTML = codes.map(function (code) {
+            return '<option value="' + code + '">' + code.replace(/_/g, " ") + '</option>';
+        }).join("");
+    }
+    resourceSelect.addEventListener("change", refresh);
+    refresh();
+}());
+</script>
+{% endblock %}

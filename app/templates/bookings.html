@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, booking_rows %}
+{% block title %}My bookings{% endblock %}
+{% block page_title %}My bookings{% endblock %}
+{% block page_subtitle %}Reserve a classroom or laboratory directly, or use smart recommendations for a ranked suggestion{% endblock %}
+
+{% block content %}
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>All my bookings</h2>
+                <p class="card-sub">{{ bookings | length }} reservation(s)</p>
+                <span class="spacer"></span>
+                <a class="btn small" href="{{ url_for('views.recommendations') }}">Smart recommendations</a>
+            </div>
+            <div class="card-body tight">
+                {% if bookings %}
+                    {{ booking_rows(bookings) }}
+                {% else %}
+                    {{ empty('No bookings yet', 'Create a booking with the form beside this list.') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>New booking</h2>
+                <p class="card-sub">Capacity, equipment and time conflicts are validated before the booking is saved</p>
+            </div>
+            <div class="card-body">
+                <form data-json-form data-url="/api/bookings">
+                    <div class="field">
+                        <label for="resource_id">Resource</label>
+                        <select id="resource_id" name="resource_id" required>
+                            {% for resource in resources %}
+                                <option value="{{ resource.id }}">
+                                    {{ resource.code }} - {{ resource.name }} ({{ resource.capacity }} seats, {{ resource.status | lower }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-grid" style="margin-top:.7rem;">
+                        <div class="field">
+                            <label for="start_time">From</label>
+                            <input type="datetime-local" id="start_time" name="start_time" required>
+                        </div>
+                        <div class="field">
+                            <label for="end_time">Until</label>
+                            <input type="datetime-local" id="end_time" name="end_time" required>
+                        </div>
+                        <div class="field">
+                            <label for="attendees">Attendees</label>
+                            <input type="number" id="attendees" name="attendees" min="1" value="20" required>
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top:.7rem;">
+                        <label for="purpose">Purpose</label>
+                        <input type="text" id="purpose" name="purpose" maxlength="120" required
+                               placeholder="Project review meeting">
+                    </div>
+                    <div class="field" style="margin-top:.7rem;">
+                        <label>Required equipment</label>
+                        <div class="checkbox-grid">
+                            {% for item in equipment %}
+                                <label class="checkbox">
+                                    <input type="checkbox" name="equipment" data-group="list" value="{{ item.code }}">
+                                    {{ item.name }}
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Create booking</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    function pad(value) { return String(value).padStart(2, "0"); }
+    var start = new Date();
+    start.setHours(start.getHours() + 1, 0, 0, 0);
+    var end = new Date(start.getTime() + 60 * 60 * 1000);
+    function fmt(date) {
+        return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+            "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+    }
+    document.getElementById("start_time").value = fmt(start);
+    document.getElementById("end_time").value = fmt(end);
+}());
+</script>
+{% endblock %}

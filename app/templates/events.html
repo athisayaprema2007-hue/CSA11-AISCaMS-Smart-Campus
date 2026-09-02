@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, status_badge %}
+{% block title %}Campus events{% endblock %}
+{% block page_title %}Campus events{% endblock %}
+{% block page_subtitle %}Upcoming symposiums, drives and community activities across the campus{% endblock %}
+
+{% block content %}
+<div class="grid {{ 'split' if can_manage else '' }}">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Event calendar</h2>
+                <p class="card-sub">{{ events | length }} event(s)</p>
+            </div>
+            <div class="card-body tight">
+                {% if events %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead>
+                            <tr><th>Event</th><th>Category</th><th>When</th><th>Venue</th><th class="num">Seats</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                            {% for event in events %}
+                                <tr>
+                                    <td><strong>{{ event.title }}</strong><br><small>{{ event.description }}</small></td>
+                                    <td><small>{{ event.category }}</small></td>
+                                    <td class="nowrap">{{ event.start_display }}<br><small>to {{ event.end_display }}</small></td>
+                                    <td class="mono">{{ event.venue_code or '-' }}<br><small>{{ event.venue_name or 'Campus' }}</small></td>
+                                    <td class="num">{{ event.registrations }}/{{ event.capacity }}</td>
+                                    <td>{{ status_badge(event.status) }}</td>
+                                    <td class="right">
+                                        {% if event.registered %}
+                                            <span class="badge success">Registered</span>
+                                        {% elif event.status == 'SCHEDULED' and event.seats_left > 0 %}
+                                            <button class="btn small" data-action="post"
+                                                    data-url="/api/events/{{ event.id }}/register">Register</button>
+                                        {% else %}
+                                            <small class="muted">Closed</small>
+                                        {% endif %}
+                                        {% if can_manage and event.status == 'SCHEDULED' %}
+                                            <button class="btn small danger" data-action="post"
+                                                    data-url="/api/events/{{ event.id }}/cancel"
+                                                    data-confirm="Cancel this event?">Cancel</button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No events scheduled', 'Published campus events will be listed here.') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if can_manage %}
+    <div>
+        <div class="card">
+            <div class="card-header"><h2>Publish an event</h2></div>
+            <div class="card-body">
+                <form data-json-form data-url="/api/events">
+                    <div class="field">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="title" required>
+                    </div>
+                    <div class="field" style="margin-top:.7rem;">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" required></textarea>
+                    </div>
+                    <div class="form-grid" style="margin-top:.7rem;">
+                        <div class="field">
+                            <label for="category">Category</label>
+                            <input type="text" id="category" name="category" value="Seminar" required>
+                        </div>
+                        <div class="field">
+                            <label for="capacity">Capacity</label>
+                            <input type="number" id="capacity" name="capacity" value="80" min="1" required>
+                        </div>
+                        <div class="field">
+                            <label for="start_time">Starts</label>
+                            <input type="datetime-local" id="start_time" name="start_time" required>
+                        </div>
+                        <div class="field">
+                            <label for="end_time">Ends</label>
+                            <input type="datetime-local" id="end_time" name="end_time" required>
+                        </div>
+                        <div class="field">
+                            <label for="venue_id">Venue</label>
+                            <select id="venue_id" name="venue_id">
+                                <option value="">Campus wide</option>
+                                {% for venue in venues %}
+                                    <option value="{{ venue.id }}">{{ venue.code }} - {{ venue.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Publish event</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

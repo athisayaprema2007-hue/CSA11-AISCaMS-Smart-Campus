@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}AISCaMS{% endblock %} | AISCaMS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231d4ed8'/><text x='16' y='22' font-size='15' font-family='Segoe UI' fill='white' text-anchor='middle'>A</text></svg>">
+</head>
+<body>
+{% from "_icons.html" import icon %}
+<div class="layout">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">AI</div>
+            <div class="brand-text">
+                <strong>AISCaMS</strong>
+                <span>Smart Campus Management</span>
+            </div>
+        </div>
+        <nav class="nav">
+            {% for item in nav_items %}
+                <a href="{{ url_for(item.endpoint) }}"
+                   class="{{ 'active' if request.endpoint == item.endpoint else '' }}">
+                    {{ icon(item.icon) }}
+                    <span>{{ item.label }}</span>
+                    {% if item.endpoint == 'views.notifications' and unread_notifications %}
+                        <span class="nav-badge">{{ unread_notifications }}</span>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="avatar">{{ current_user.full_name[:1] | upper }}</div>
+                <div>
+                    <strong>{{ current_user.full_name }}</strong>
+                    <span>{{ current_user.job_title }}</span>
+                </div>
+            </div>
+            <a class="btn secondary small block" href="{{ url_for('auth.logout') }}">Sign out</a>
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div class="page-heading">
+                <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                <p>{% block page_subtitle %}{% endblock %}</p>
+            </div>
+            <div class="topbar-actions">
+                <span class="badge brand">{{ current_user.role | title }}</span>
+                <a class="btn secondary small" href="{{ url_for('views.notifications') }}">
+                    Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}
+                </a>
+                {% block topbar_actions %}{% endblock %}
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-stack">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            AISCaMS v{{ app_version }} &middot; Flask + SQLite reference implementation &middot;
+            Object Oriented Analysis and Design (CSA11) &middot; {{ current_year }}
+        </footer>
+    </div>
+</div>
+<div class="toast-stack"></div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

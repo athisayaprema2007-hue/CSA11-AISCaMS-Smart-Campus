@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in | AISCaMS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+<div class="login-page">
+    <section class="login-hero">
+        <div class="brand" style="border:none;padding:0 0 1.4rem 0;">
+            <div class="brand-mark">AI</div>
+            <div class="brand-text">
+                <strong>AISCaMS</strong>
+                <span>AI-Enabled Smart Campus Management System</span>
+            </div>
+        </div>
+        <h1>One campus platform for academics, facilities and safety.</h1>
+        <p>Role based access for students, faculty, administrators, security personnel and
+           maintenance staff, with IoT monitoring and explainable resource recommendations.</p>
+        <ul>
+            <li>Explainable classroom and laboratory recommendations with scores and reasons</li>
+            <li>Booking workflow with conflict, capacity and equipment validation</li>
+            <li>Service requests classified automatically with priority and SLA</li>
+            <li>Live IoT monitoring: occupancy, temperature, air quality, equipment and parking</li>
+            <li>Critical readings raise high priority maintenance tickets automatically</li>
+        </ul>
+    </section>
+
+    <section class="login-panel">
+        <h2>Sign in</h2>
+        <p class="muted">Use a campus account, or pick a demo role to explore the system.</p>
+
+        {% if error %}<div class="flash error" style="margin-bottom:.9rem;">{{ error }}</div>{% endif %}
+
+        <form method="post" class="grid" style="gap:.8rem;">
+            <div class="field">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" autocomplete="username"
+                       placeholder="athisaya" required>
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password"
+                       autocomplete="current-password" placeholder="campus123" required>
+            </div>
+            <button class="btn block" type="submit">Sign in</button>
+        </form>
+
+        <div class="divider">or continue with a demo role</div>
+
+        <div class="demo-grid">
+            {% for account in accounts %}
+                <a class="demo-card" href="{{ url_for('auth.demo_login', username=account.username) }}">
+                    <span class="avatar" style="background:var(--brand-soft);color:var(--brand-dark);">
+                        {{ account.full_name[:1] }}
+                    </span>
+                    <span class="who">
+                        <strong>{{ account.full_name }}</strong>
+                        <span>{{ account.job_title }} &middot; {{ account.username }}</span>
+                    </span>
+                    <span class="badge brand">{{ account.role | title }}</span>
+                </a>
+            {% endfor %}
+        </div>
+
+        <p class="muted" style="margin-top:1.1rem;font-size:.8rem;">
+            Every seeded demo account uses the password <span class="mono">{{ demo_password }}</span>.
+            The application runs entirely offline on SQLite.
+        </p>
+    </section>
+</div>
+</body>
+</html>

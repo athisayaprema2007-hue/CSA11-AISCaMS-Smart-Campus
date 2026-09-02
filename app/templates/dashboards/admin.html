@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_cards, empty, status_badge, booking_rows, request_rows %}
+{% block title %}Administrator dashboard{% endblock %}
+{% block page_title %}Campus operations overview{% endblock %}
+{% block page_subtitle %}Administrator dashboard &middot; utilisation, approvals, service requests and SLA status{% endblock %}
+
+{% block content %}
+{{ metric_cards(data.metrics) }}
+
+<div class="card">
+    <div class="card-header">
+        <h2>Open service requests</h2>
+        <p class="card-sub">Assign unassigned tickets to maintenance staff</p>
+        <span class="spacer"></span>
+        <a class="btn secondary small" href="{{ url_for('views.admin') }}">Administration workspace</a>
+    </div>
+    <div class="card-body tight">
+        {% if data.open_requests %}
+            {{ request_rows(data.open_requests, true, data.technicians) }}
+        {% else %}
+            {{ empty('No open service requests', 'New requests will be listed here for assignment.') }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Bookings awaiting approval</h2>
+                <p class="card-sub">Student requests for laboratories and large rooms</p>
+            </div>
+            <div class="card-body tight">
+                {% if data.pending_bookings %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Reference</th><th>Resource</th><th>Requested by</th><th>Slot</th><th class="num">People</th><th></th></tr></thead>
+                            <tbody>
+                            {% for booking in data.pending_bookings %}
+                                <tr>
+                                    <td class="mono">{{ booking.reference }}</td>
+                                    <td class="col-mid"><strong>{{ booking.resource_code }}</strong><br><small>{{ booking.purpose }}</small></td>
+                                    <td>{{ booking.user_name }}</td>
+                                    <td class="nowrap">{{ booking.start_display }}<br><small>to {{ booking.end_display }}</small></td>
+                                    <td class="num">{{ booking.attendees }}</td>
+                                    <td class="right">
+                                        <div class="btn-row" style="justify-content:flex-end;">
+                                            <button class="btn small success" data-action="post"
+                                                    data-url="/api/bookings/{{ booking.id }}/decision"
+                                                    data-payload='{"decision":"approve"}'>Approve</button>
+                                            <button class="btn small danger" data-action="post"
+                                                    data-url="/api/bookings/{{ booking.id }}/decision"
+                                                    data-payload='{"decision":"reject"}'>Reject</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No bookings awaiting approval', 'Approved and confirmed bookings appear in the calendar.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Most requested resources</h2>
+                <p class="card-sub">Booking volume and reserved hours</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Resource</th><th class="num">Bookings</th><th class="num">Hours</th></tr></thead>
+                        <tbody>
+                        {% for row in data.analytics.top_resources %}
+                            <tr>
+                                <td><strong class="mono">{{ row.code }}</strong> <small>{{ row.name }}</small></td>
+                                <td class="num">{{ row.bookings }}</td>
+                                <td class="num">{{ row.hours }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header"><h2>Campus utilisation</h2></div>
+            <div class="card-body">
+                <div class="stat-row"><span>Classrooms</span><span>{{ data.analytics.resource_types.get('CLASSROOM', 0) }}</span></div>
+                <div class="stat-row"><span>Laboratories</span><span>{{ data.analytics.resource_types.get('LABORATORY', 0) }}</span></div>
+                <div class="stat-row"><span>Parking areas</span><span>{{ data.analytics.resource_types.get('PARKING_AREA', 0) }}</span></div>
+                <div class="stat-row"><span>Smart devices</span><span>{{ data.analytics.resource_types.get('SMART_DEVICE', 0) }}</span></div>
+                <div class="stat-row"><span>Average utilisation</span><span>{{ data.analytics.average_utilisation }}%</span></div>
+                <div class="stat-row"><span>Reserved hours</span><span>{{ data.analytics.booked_hours }}</span></div>
+                <div class="stat-row"><span>Available now</span><span>{{ data.analytics.available_resources }} of {{ data.analytics.resource_status.values() | sum }}</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>Service request SLA</h2></div>
+            <div class="card-body">
+                <div class="stat-row"><span>Open tickets</span><span>{{ data.sla.total_open }}</span></div>
+                <div class="stat-row"><span>On track</span><span class="badge success">{{ data.sla.on_track }}</span></div>
+                <div class="stat-row"><span>At risk</span><span class="badge warning">{{ data.sla.at_risk }}</span></div>
+                <div class="stat-row"><span>Breached</span><span class="badge danger">{{ data.sla.breached }}</span></div>
+                {% for priority in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] %}
+                    <div class="stat-row"><span>{{ priority | title }} priority (open)</span>
+                        <span>{{ data.sla.priorities.get(priority, 0) }}</span></div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>Infrastructure alerts</h2>
+                <span class="spacer"></span>
+                <a class="btn secondary small" href="{{ url_for('views.iot') }}">IoT monitoring</a>
+            </div>
+            <div class="card-body tight">
+                {% if data.alerts %}
+                    {% for alert in data.alerts %}
+                        <div class="stat-row">
+                            <span><strong>{{ alert.resource_code }}</strong> {{ alert.message }}<br>
+                                <small>{{ alert.alert_type.replace('_',' ') | title }} &middot; {{ alert.created_at }}{% if alert.request_ticket %} &middot; ticket {{ alert.request_ticket }}{% endif %}</small></span>
+                            <span>{{ status_badge(alert.status) }}</span>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    {{ empty('No active alerts', 'Critical IoT readings will appear here.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>Upcoming events</h2></div>
+            <div class="card-body tight">
+                {% for event in data.events %}
+                    <div class="stat-row">
+                        <span><strong>{{ event.title }}</strong><br><small>{{ event.start_display }} &middot; {{ event.venue_code or 'Campus' }}</small></span>
+                        <span class="badge neutral">{{ event.registrations }}/{{ event.capacity }}</span>
+                    </div>
+                {% else %}
+                    {{ empty('No upcoming events', 'Publish an event from the events page.') }}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

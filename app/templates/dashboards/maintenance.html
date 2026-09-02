@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_cards, empty, status_badge, sla_badge %}
+{% block title %}Maintenance dashboard{% endblock %}
+{% block page_title %}Maintenance workspace{% endblock %}
+{% block page_subtitle %}{{ current_user.job_title }} &middot; assigned tickets, priority and SLA status{% endblock %}
+
+{% block content %}
+{{ metric_cards(data.metrics) }}
+
+<div class="card">
+    <div class="card-header">
+        <h2>My assigned service requests</h2>
+        <p class="card-sub">Update the status as the work progresses</p>
+        <span class="spacer"></span>
+        <a class="btn small" href="{{ url_for('views.maintenance') }}">Open workflow</a>
+    </div>
+    <div class="card-body tight">
+        {% if data.queue %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Ticket</th><th>Issue</th><th>Resource</th><th>Priority</th><th>Status</th><th>SLA</th></tr></thead>
+                    <tbody>
+                    {% for item in data.queue %}
+                        <tr>
+                            <td class="mono">{{ item.ticket }}</td>
+                            <td class="col-wide">{{ item.title }}<br><small>{{ item.category_label }} &middot; {{ item.handling_team }}</small></td>
+                            <td class="mono">{{ item.resource_code }}</td>
+                            <td>{{ status_badge(item.priority) }}</td>
+                            <td>{{ status_badge(item.status) }}</td>
+                            <td>{{ sla_badge(item) }}<br><small>due {{ item.sla_due_display }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {{ empty('No tickets assigned', 'The administrator assigns service requests to your queue.') }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Critical IoT readings</h2>
+        <p class="card-sub">Readings that raised an automatic ticket</p>
+    </div>
+    <div class="card-body tight">
+        {% if data.critical_readings %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Resource</th><th>Metric</th><th>Value</th><th>Recorded</th></tr></thead>
+                    <tbody>
+                    {% for reading in data.critical_readings %}
+                        <tr>
+                            <td class="mono">{{ reading.resource_code }}</td>
+                            <td>{{ reading.metric_label }}</td>
+                            <td class="strong">{{ reading.display_value }}</td>
+                            <td><small>{{ reading.recorded_display }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {{ empty('No critical readings', 'Campus equipment is operating normally.') }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, status_badge %}
+{% block title %}IoT monitoring{% endblock %}
+{% block page_title %}IoT campus monitoring{% endblock %}
+{% block page_subtitle %}Room occupancy, temperature, air quality, equipment condition, parking occupancy and device health - every value is stored in the database{% endblock %}
+
+{% block content %}
+<div class="metrics">
+    <div class="metric tone-primary">
+        <div class="metric-label">Devices online</div>
+        <div class="metric-value">{{ snapshot.online_devices }}/{{ snapshot.total_devices }}</div>
+        <div class="metric-hint">Smart devices reporting to the gateway</div>
+    </div>
+    <div class="metric tone-success">
+        <div class="metric-label">Normal readings</div>
+        <div class="metric-value">{{ snapshot.severity_counts.NORMAL }}</div>
+        <div class="metric-hint">Within the configured thresholds</div>
+    </div>
+    <div class="metric tone-warning">
+        <div class="metric-label">Warning readings</div>
+        <div class="metric-value">{{ snapshot.severity_counts.WARNING }}</div>
+        <div class="metric-hint">Approaching the critical limit</div>
+    </div>
+    <div class="metric tone-danger">
+        <div class="metric-label">Critical readings</div>
+        <div class="metric-value">{{ snapshot.severity_counts.CRITICAL }}</div>
+        <div class="metric-hint">{{ snapshot.alert_counts.OPEN }} alert(s) still open</div>
+    </div>
+</div>
+
+{% set metric_order = [('OCCUPANCY', 'Room occupancy'), ('TEMPERATURE', 'Temperature'),
+                       ('AIR_QUALITY', 'Air quality index'), ('EQUIPMENT_STATUS', 'Equipment status'),
+                       ('PARKING_OCCUPANCY', 'Parking occupancy'), ('DEVICE_STATUS', 'Device status')] %}
+{% for metric, label in metric_order %}
+    {% if snapshot.by_metric.get(metric) %}
+        <div class="section-title"><h2>{{ label }}</h2><span class="line"></span>
+            <small class="muted">{{ snapshot.by_metric.get(metric) | length }} device(s)</small></div>
+        <div class="reading-grid" style="margin-bottom:1.1rem;">
+            {% for reading in snapshot.by_metric.get(metric) %}
+                <div class="reading {{ reading.severity }}">
+                    <div class="metric-name">{{ reading.resource_code or reading.device_code }}</div>
+                    <div class="value">{{ reading.display_value }}</div>
+                    <div class="where">{{ reading.resource_name or reading.device_name }}</div>
+                    <div style="margin-top:.45rem;display:flex;justify-content:space-between;align-items:center;">
+                        {{ status_badge(reading.severity) }}
+                        <small class="muted">{{ reading.recorded_display }}</small>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endfor %}
+
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Active alerts</h2>
+                <p class="card-sub">Critical readings raise an alert and a high priority ticket automatically</p>
+            </div>
+            <div class="card-body tight">
+                {% if snapshot.alerts %}
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Resource</th><th>Alert</th><th>Severity</th><th>Ticket</th><th>Status</th>{% if can_acknowledge %}<th></th>{% endif %}</tr></thead>
+                            <tbody>
+                            {% for alert in snapshot.alerts %}
+                                <tr>
+                                    <td class="mono">{{ alert.resource_code }}</td>
+                                    <td>{{ alert.message }}<br><small>{{ alert.created_at }}</small></td>
+                                    <td>{{ status_badge(alert.severity) }}</td>
+                                    <td class="mono">{{ alert.request_ticket or '-' }}</td>
+                                    <td>{{ status_badge(alert.status) }}</td>
+                                    {% if can_acknowledge %}
+                                        <td class="right">
+                                            {% if alert.status == 'OPEN' %}
+                                                <button class="btn small" data-action="post"
+                                                        data-url="/api/alerts/{{ alert.id }}/acknowledge">Acknowledge</button>
+                                            {% else %}
+                                                <small class="muted">{{ alert.acknowledged_by_name or 'acknowledged' }}</small>
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {{ empty('No active alerts', 'All monitored values are inside the safe range.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Recent readings</h2>
+                <p class="card-sub">Newest measurements received from the gateway</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Recorded</th><th>Device</th><th>Resource</th><th>Metric</th><th>Value</th><th>Severity</th></tr></thead>
+                        <tbody>
+                        {% for reading in snapshot.recent[:14] %}
+                            <tr>
+                                <td class="nowrap"><small>{{ reading.recorded_display }}</small></td>
+                                <td class="mono">{{ reading.device_code }}</td>
+                                <td class="mono">{{ reading.resource_code or '-' }}</td>
+                                <td>{{ reading.metric_label }}</td>
+                                <td class="strong">{{ reading.display_value }}</td>
+                                <td>{{ status_badge(reading.severity) }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>IoT gateway simulator</h2>
+                <p class="card-sub">Publish a reading exactly as the external gateway would</p>
+            </div>
+            <div class="card-body">
+                <form id="gateway-form">
+                    <div class="field">
+                        <label for="device_id">Smart device</label>
+                        <select id="device_id" name="device_id" required>
+                            {% for device in devices %}
+                                <option value="{{ device.id }}">{{ device.code }} - {{ device.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="field" style="margin-top:.7rem;">
+                        <label for="metric">Metric</label>
+                        <select id="metric" name="metric" required>
+                            {% for metric in metrics %}
+                                <option value="{{ metric }}">{{ metric_labels[metric] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="field" style="margin-top:.7rem;">
+                        <label for="value">Measured value</label>
+                        <input type="number" step="0.1" id="value" name="value" value="36.5" required>
+                        <span class="hint">Temperature &ge; 35 C, air quality &ge; 250 AQI, occupancy &gt; 100 %
+                              or an equipment status of 0 is treated as critical.</span>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Publish reading</button>
+                    </div>
+                </form>
+                <div id="gateway-result"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Device health</h3></div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Device</th><th>Type</th><th>Monitors</th><th>State</th></tr></thead>
+                        <tbody>
+                        {% for device in snapshot.devices %}
+                            <tr>
+                                <td class="mono">{{ device.code }}</td>
+                                <td><small>{{ device.device_type.replace('_',' ') | title }}</small></td>
+                                <td><small>{{ device.summary }}</small></td>
+                                <td><span class="badge {{ 'success' if device.operational else 'danger' }}">
+                                    {{ 'Online' if device.operational else 'Offline' }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var form = document.getElementById("gateway-form");
+    var box = document.getElementById("gateway-result");
+    var esc = window.AISCAMS.escapeHtml;
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var button = form.querySelector("[type='submit']");
+        window.AISCAMS.busy(button, true, "Publishing...");
+        window.AISCAMS.postJSON("/api/iot/readings", window.AISCAMS.formValues(form))
+            .then(function (data) {
+                var reading = data.reading;
+                var ticket = data.request
+                    ? '<div class="stat-row"><span>Automatic ticket</span><span class="mono">' +
+                          esc(data.request.ticket) + ' (' + esc(data.request.priority) + ')</span></div>' +
+                      '<div class="stat-row"><span>Assigned to</span><span>' +
+                          esc(data.request.assigned_to_name || "awaiting assignment") + '</span></div>' +
+                      '<div class="stat-row"><span>SLA</span><span>' + data.request.sla_hours +
+                          ' h &middot; due ' + esc(data.request.sla_due_display) + '</span></div>'
+                    : '';
+                box.innerHTML =
+                    '<div class="card" style="margin-top:1rem;border-color:' +
+                        (reading.severity === "CRITICAL" ? "var(--danger)" : "var(--success)") + ';">' +
+                      '<div class="card-body">' +
+                        '<h3>' + esc(reading.metric_label) + ' recorded</h3>' +
+                        '<div class="stat-row"><span>Value</span><span class="strong">' +
+                            esc(reading.display_value) + '</span></div>' +
+                        '<div class="stat-row"><span>Severity</span><span class="badge ' +
+                            esc(reading.severity) + '">' + esc(reading.severity) + '</span></div>' +
+                        '<div class="stat-row"><span>Resource</span><span class="mono">' +
+                            esc(reading.resource_code || reading.device_code) + '</span></div>' +
+                        ticket +
+                        '<p class="muted" style="margin-top:.6rem;font-size:.82rem;">' +
+                            esc(data.message) + '</p>' +
+                      '</div></div>';
+                window.AISCAMS.toast(data.message, reading.severity === "CRITICAL" ? "error" : "success");
+                window.AISCAMS.busy(button, false);
+            })
+            .catch(function (error) {
+                window.AISCAMS.toast(error.message, "error");
+                window.AISCAMS.busy(button, false);
+            });
+    });
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, status_badge %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notification centre{% endblock %}
+{% block page_subtitle %}Booking confirmations, service request updates and infrastructure alerts delivered by the observer bus{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn small secondary" data-action="post" data-url="/api/notifications/read-all">Mark all read</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>{{ notifications | length }} notification(s)</h2>
+        <p class="card-sub">{{ unread_notifications }} unread</p>
+    </div>
+    <div class="card-body tight">
+        {% if notifications %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Received</th><th>Category</th><th>Message</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                    {% for note in notifications %}
+                        <tr>
+                            <td class="nowrap"><small>{{ note.created_display }}</small></td>
+                            <td>{{ status_badge(note.category) }}</td>
+                            <td><strong>{{ note.title }}</strong><br><small>{{ note.message }}</small></td>
+                            <td><span class="badge {{ 'neutral' if note.is_read else 'brand' }}">
+                                {{ 'Read' if note.is_read else 'Unread' }}</span></td>
+                            <td class="right">
+                                {% if not note.is_read %}
+                                    <button class="btn small secondary" data-action="post"
+                                            data-url="/api/notifications/{{ note.id }}/read">Mark read</button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {{ empty('No notifications', 'Activity on your bookings and requests will be delivered here.') }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

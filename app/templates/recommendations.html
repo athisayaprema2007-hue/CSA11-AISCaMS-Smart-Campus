@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Smart recommendations{% endblock %}
+{% block page_title %}Smart resource recommendations{% endblock %}
+{% block page_subtitle %}An explainable weighted ranking strategy scores every eligible room; unavailable, undersized and unequipped rooms are filtered out{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>What do you need?</h2>
+        <p class="card-sub">Hard constraints are applied first, then the selected ranking strategy scores the survivors</p>
+    </div>
+    <div class="card-body">
+        <form id="rec-form">
+            <div class="form-grid">
+                <div class="field">
+                    <label for="attendees">Number of people</label>
+                    <input type="number" id="attendees" name="attendees" min="1" max="500" value="35" required>
+                </div>
+                <div class="field">
+                    <label for="start_time">From</label>
+                    <input type="datetime-local" id="start_time" name="start_time" value="{{ default_start }}" required>
+                </div>
+                <div class="field">
+                    <label for="end_time">Until</label>
+                    <input type="datetime-local" id="end_time" name="end_time" value="{{ default_end }}" required>
+                </div>
+                <div class="field">
+                    <label for="resource_type">Resource type</label>
+                    <select id="resource_type" name="resource_type">
+                        <option value="CLASSROOM">Classroom</option>
+                        <option value="LABORATORY">Laboratory</option>
+                        <option value="ANY">Classroom or laboratory</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="building">Preferred building</label>
+                    <select id="building" name="building">
+                        <option value="">No preference</option>
+                        {% for building in buildings %}
+                            <option value="{{ building.code }}">{{ building.name }} ({{ building.walking_distance_m }} m)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="strategy">Ranking strategy</label>
+                    <select id="strategy" name="strategy">
+                        {% for strategy in strategies %}
+                            <option value="{{ strategy.key }}">{{ strategy.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="hint" id="strategy-hint">{{ strategies[0].description }}</span>
+                </div>
+                <div class="field" style="grid-column: 1 / -1;">
+                    <label for="purpose">Purpose (used when you book)</label>
+                    <input type="text" id="purpose" name="purpose" maxlength="120"
+                           value="OOAD project review meeting" required>
+                </div>
+            </div>
+
+            <div class="field" style="margin-top:.9rem;">
+                <label>Required equipment</label>
+                <div class="checkbox-grid">
+                    {% for item in equipment %}
+                        <label class="checkbox">
+                            <input type="checkbox" name="equipment" data-group="list" value="{{ item.code }}"
+                                   {% if item.code == 'PROJECTOR' %}checked{% endif %}>
+                            {{ item.name }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn" type="submit">Get recommendations</button>
+                <button class="btn secondary" type="button" id="reset-btn">Reset filters</button>
+                <span class="muted" id="rec-summary"></span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="booking-confirmation"></div>
+
+<div class="grid split">
+    <div>
+        <div class="section-title"><h2>Ranked recommendations</h2><span class="line"></span></div>
+        <div id="rec-results" class="rec-list"></div>
+    </div>
+    <div>
+        <div class="section-title"><h2>Filtered out</h2><span class="line"></span></div>
+        <div class="card">
+            <div class="card-body">
+                <p class="muted" style="font-size:.83rem;">
+                    Resources rejected by the hard constraints: unavailable status, insufficient
+                    capacity, missing equipment or a clash with an existing booking.
+                </p>
+                <div id="rec-rejected" class="excluded"></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h3>How the score is built</h3></div>
+            <div class="card-body" id="strategy-weights"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var strategies = {{ strategies | tojson }};
+    var form = document.getElementById("rec-form");
+    var results = document.getElementById("rec-results");
+    var rejected = document.getElementById("rec-rejected");
+    var summary = document.getElementById("rec-summary");
+    var confirmation = document.getElementById("booking-confirmation");
+    var weightsBox = document.getElementById("strategy-weights");
+    var esc = window.AISCAMS.escapeHtml;
+
+    function renderWeights(key) {
+        var strategy = strategies.filter(function (s) { return s.key === key; })[0] || strategies[0];
+        document.getElementById("strategy-hint").textContent = strategy.description;
+        var rows = Object.keys(strategy.weights).sort(function (a, b) {
+            return strategy.weights[b] - strategy.weights[a];
+        }).map(function (name) {
+            var pct = Math.round(strategy.weights[name] * 100);
+            return '<div class="factor-bar"><span class="label">' +
+                esc(name.replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); })) +
+                '</span><span class="track"><span class="fill" style="width:' + pct +
+                '%"></span></span><span class="points">' + pct + '%</span></div>';
+        }).join("");
+        weightsBox.innerHTML = rows;
+    }
+
+    function factorMarkup(factors) {
+        return factors.map(function (factor) {
+            var pct = Math.round(factor.value * 100);
+            return '<div class="factor-bar"><span class="label">' + esc(factor.label) +
+                '</span><span class="track"><span class="fill" style="width:' + pct +
+                '%"></span></span><span class="points">+' + factor.points.toFixed(1) + '</span></div>';
+        }).join("");
+    }
+
+    function render(data) {
+        summary.textContent = data.eligible + " of " + data.considered +
+            " resources satisfy every constraint - ranked by " + data.strategy.label + ".";
+        renderWeights(data.strategy.key);
+
+        if (!data.recommendations.length) {
+            results.innerHTML = '<div class="card"><div class="card-body empty-state">' +
+                '<strong>No resource satisfies these requirements</strong>' +
+                '<span>Relax the equipment list, reduce the group size or choose another slot.</span>' +
+                '</div></div>';
+        } else {
+            results.innerHTML = data.recommendations.map(function (item, index) {
+                var equipment = (item.equipment_codes || []).map(function (code) {
+                    return '<span class="chip ok">' + esc(code) + '</span>';
+                }).join("");
+                var reasons = item.reasons.map(function (reason) {
+                    return "<li>" + esc(reason) + "</li>";
+                }).join("");
+                return '' +
+                '<article class="rec' + (index === 0 ? " top" : "") + '">' +
+                  '<div class="rec-head">' +
+                    '<div class="rank">' + (index + 1) + '</div>' +
+                    '<div class="rec-title">' +
+                      '<strong>' + esc(item.code) + " - " + esc(item.name) + '</strong>' +
+                      '<p>' + esc(item.summary) + '</p>' +
+                      '<p>' + esc(item.building) + " &middot; floor " + item.floor +
+                        " &middot; " + item.walking_distance_m + ' m walk</p>' +
+                    '</div>' +
+                    '<div class="score-box">' +
+                      '<div class="score-value">' + item.score.toFixed(1) + '</div>' +
+                      '<div class="score-label">score / 100</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="rec-body">' +
+                    '<div class="inline-list">' +
+                      '<span class="chip">Capacity ' + item.capacity + '</span>' +
+                      '<span class="chip">' + esc(item.status) + '</span>' +
+                      '<span class="chip">Utilisation ' + Math.round(item.utilisation * 100) + '%</span>' +
+                      equipment +
+                    '</div>' +
+                    '<div style="margin-top:.7rem;">' + factorMarkup(item.factors) + '</div>' +
+                    '<ul class="reasons">' + reasons + '</ul>' +
+                  '</div>' +
+                  '<div class="rec-actions">' +
+                    '<button class="btn small" data-book="' + item.id + '">Book ' + esc(item.code) + '</button>' +
+                    '<span class="muted" style="font-size:.8rem;">Booked with the slot and purpose entered above</span>' +
+                  '</div>' +
+                '</article>';
+            }).join("");
+        }
+
+        rejected.innerHTML = data.rejected.length
+            ? data.rejected.map(function (item) {
+                return "<div><strong>" + esc(item.code) + "</strong> - " +
+                    esc(item.rejection_reason) + "</div>";
+            }).join("")
+            : '<div class="muted">Every campus resource satisfied the constraints.</div>';
+    }
+
+    function search(event) {
+        if (event) { event.preventDefault(); }
+        var values = window.AISCAMS.formValues(form);
+        results.innerHTML = '<div class="card"><div class="card-body empty-state">Scoring resources...</div></div>';
+        window.AISCAMS.postJSON("/api/recommendations", {
+            attendees: values.attendees,
+            start_time: values.start_time,
+            end_time: values.end_time,
+            resource_type: values.resource_type,
+            building: values.building,
+            strategy: values.strategy,
+            equipment: values.equipment || [],
+            limit: 5
+        }).then(render).catch(function (error) {
+            window.AISCAMS.toast(error.message, "error");
+            results.innerHTML = '<div class="card"><div class="card-body empty-state">' +
+                '<strong>Could not rank resources</strong><span>' + esc(error.message) + '</span></div></div>';
+        });
+    }
+
+    form.addEventListener("submit", search);
+    document.getElementById("strategy").addEventListener("change", function (event) {
+        renderWeights(event.target.value);
+        search();
+    });
+    document.getElementById("reset-btn").addEventListener("click", function () {
+        form.reset();
+        search();
+    });
+
+    results.addEventListener("click", function (event) {
+        var button = event.target.closest("[data-book]");
+        if (!button) { return; }
+        var values = window.AISCAMS.formValues(form);
+        window.AISCAMS.busy(button, true, "Booking...");
+        window.AISCAMS.postJSON("/api/bookings", {
+            resource_id: button.dataset.book,
+            start_time: values.start_time,
+            end_time: values.end_time,
+            attendees: values.attendees,
+            purpose: values.purpose,
+            equipment: values.equipment || []
+        }).then(function (data) {
+            var booking = data.booking;
+            confirmation.innerHTML =
+                '<div class="card" style="border-color:var(--success);">' +
+                  '<div class="card-header" style="background:var(--success-soft);">' +
+                    '<h2 style="color:var(--success);">Booking ' + esc(booking.status.toLowerCase()) + '</h2>' +
+                    '<p class="card-sub">' + esc(data.message) + '</p>' +
+                  '</div>' +
+                  '<div class="card-body">' +
+                    '<div class="metrics" style="margin:0;">' +
+                      '<div class="metric tone-success"><div class="metric-label">Reference</div>' +
+                        '<div class="metric-value" style="font-size:1.35rem;">' + esc(booking.reference) + '</div>' +
+                        '<div class="metric-hint">Status ' + esc(booking.status) + '</div></div>' +
+                      '<div class="metric tone-primary"><div class="metric-label">Resource</div>' +
+                        '<div class="metric-value" style="font-size:1.35rem;">' + esc(booking.resource_code) + '</div>' +
+                        '<div class="metric-hint">' + esc(booking.resource_name) + '</div></div>' +
+                      '<div class="metric tone-info"><div class="metric-label">Slot</div>' +
+                        '<div class="metric-value" style="font-size:1.05rem;">' + esc(booking.start_display) + '</div>' +
+                        '<div class="metric-hint">until ' + esc(booking.end_display) + ' (' + booking.duration_hours + ' h)</div></div>' +
+                      '<div class="metric tone-success"><div class="metric-label">Attendees</div>' +
+                        '<div class="metric-value">' + booking.attendees + '</div>' +
+                        '<div class="metric-hint">' + esc(booking.purpose) + '</div></div>' +
+                    '</div>' +
+                    '<p class="muted" style="margin-top:.9rem;">A notification has been delivered to your ' +
+                      'notification centre. The slot is now blocked for other users.</p>' +
+                  '</div>' +
+                '</div>';
+            window.AISCAMS.toast(data.message, "success");
+            window.AISCAMS.busy(button, false);
+            confirmation.scrollIntoView({ behavior: "smooth", block: "center" });
+            search();
+        }).catch(function (error) {
+            window.AISCAMS.toast(error.message, "error");
+            window.AISCAMS.busy(button, false);
+        });
+    });
+
+    renderWeights(document.getElementById("strategy").value);
+    search();
+}());
+</script>
+{% endblock %}

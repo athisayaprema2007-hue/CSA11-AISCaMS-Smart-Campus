@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Error {{ code }} | AISCaMS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+<div class="content" style="max-width:640px;margin:6vh auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2>Error {{ code }}</h2>
+        </div>
+        <div class="card-body empty-state">
+            <strong>{{ message }}</strong>
+            <p class="muted">Use the navigation to return to a page your role can access.</p>
+            <a class="btn" href="{{ url_for('views.dashboard') }}">Back to dashboard</a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

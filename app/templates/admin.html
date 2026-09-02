@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_cards, empty, status_badge, sla_badge %}
+{% block title %}Administration{% endblock %}
+{% block page_title %}Administration workspace{% endblock %}
+{% block page_subtitle %}Users and roles, campus resources, booking approvals, request assignment and SLA monitoring{% endblock %}
+
+{% block content %}
+{{ metric_cards(data.metrics) }}
+
+<div class="grid split">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h2>Service requests</h2>
+                <p class="card-sub">Assign new tickets and monitor the SLA status</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Ticket</th><th>Issue</th><th>Resource</th><th>Priority</th><th>Status</th><th>SLA</th><th>Assignee</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        {% for item in all_requests %}
+                            <tr>
+                                <td class="mono">{{ item.ticket }}</td>
+                                <td class="col-wide"><strong>{{ item.title }}</strong><br>
+                                    <small>{{ item.category_label }} &middot;
+                                        {% if item.source == 'IOT' %}IoT gateway{% else %}{{ item.raised_by_name or 'campus user' }}{% endif %}</small></td>
+                                <td class="mono">{{ item.resource_code }}</td>
+                                <td>{{ status_badge(item.priority) }}</td>
+                                <td>{{ status_badge(item.status) }}</td>
+                                <td class="nowrap">{{ sla_badge(item) }}<br><small>due {{ item.sla_due_display }}</small></td>
+                                <td><small>{{ item.assigned_to_name or 'Unassigned' }}</small></td>
+                                <td class="right">
+                                    {% if item.status == 'NEW' %}
+                                        <form class="btn-row" data-json-form data-url="/api/requests/{{ item.id }}/assign">
+                                            <select name="staff_id" style="width:auto;min-width:130px;">
+                                                {% for tech in data.technicians %}
+                                                    <option value="{{ tech.id }}">{{ tech.full_name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button class="btn small" type="submit">Assign</button>
+                                        </form>
+                                    {% elif item.is_open %}
+                                        <small class="muted">In the technician queue</small>
+                                    {% else %}
+                                        <small class="muted">Completed</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Campus resource inventory</h2>
+                <p class="card-sub">Classrooms, laboratories, parking areas and smart devices</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                        <tr><th>Code</th><th>Name</th><th>Type</th><th>Building</th><th class="num">Capacity</th>
+                            <th class="num">Utilisation</th><th>Status</th><th>Set status</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for resource in resources %}
+                            <tr>
+                                <td class="mono">{{ resource.code }}</td>
+                                <td class="col-mid">{{ resource.name }}<br><small>{{ resource.equipment_codes | join(', ') or 'no equipment registered' }}</small></td>
+                                <td><small>{{ resource.resource_type.replace('_',' ') | title }}</small></td>
+                                <td><small>{{ resource.building }}</small></td>
+                                <td class="num">{{ resource.capacity }}</td>
+                                <td class="num">{{ (resource.utilisation * 100) | round(0, 'floor') }}%</td>
+                                <td>{{ status_badge(resource.status) }}</td>
+                                <td>
+                                    <form class="btn-row" data-json-form
+                                          data-url="/api/admin/resources/{{ resource.id }}/status">
+                                        <select name="status" style="width:auto;">
+                                            {% for state in ['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'OFFLINE'] %}
+                                                <option value="{{ state }}" {% if resource.status == state %}selected{% endif %}>
+                                                    {{ state | title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button class="btn small secondary" type="submit">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Users and role assignment</h2>
+                <p class="card-sub">{{ data.users | length }} campus accounts</p>
+            </div>
+            <div class="card-body tight">
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Name</th><th>Username</th><th>Department</th><th>Role</th><th>Status</th><th>Change role</th></tr></thead>
+                        <tbody>
+                        {% for user in data.users %}
+                            <tr>
+                                <td><strong>{{ user.full_name }}</strong><br><small>{{ user.email }}</small></td>
+                                <td class="mono">{{ user.username }}</td>
+                                <td><small>{{ user.department }}</small></td>
+                                <td><span class="badge brand">{{ role_labels.get(user.role, user.role) }}</span></td>
+                                <td><span class="badge {{ 'success' if user.is_active else 'danger' }}">
+                                    {{ 'Active' if user.is_active else 'Inactive' }}</span></td>
+                                <td>
+                                    <form class="btn-row" data-json-form data-url="/api/admin/users/{{ user.id }}/role">
+                                        <select name="role" style="width:auto;">
+                                            {% for code, label in role_labels.items() %}
+                                                <option value="{{ code }}" {% if user.role == code %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button class="btn small secondary" type="submit">Update</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header"><h3>Bookings awaiting approval</h3></div>
+            <div class="card-body tight">
+                {% if data.pending_bookings %}
+                    {% for booking in data.pending_bookings %}
+                        <div class="stat-row" style="align-items:flex-start;">
+                            <span>
+                                <strong class="mono">{{ booking.reference }}</strong> {{ booking.resource_code }}<br>
+                                <small>{{ booking.user_name }} &middot; {{ booking.start_display }} &middot; {{ booking.attendees }} people</small>
+                            </span>
+                            <span class="btn-row">
+                                <button class="btn small success" data-action="post"
+                                        data-url="/api/bookings/{{ booking.id }}/decision"
+                                        data-payload='{"decision":"approve"}'>Approve</button>
+                                <button class="btn small danger" data-action="post"
+                                        data-url="/api/bookings/{{ booking.id }}/decision"
+                                        data-payload='{"decision":"reject"}'>Reject</button>
+                            </span>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    {{ empty('Nothing to approve', 'Student laboratory and large room bookings appear here.') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Register a campus resource</h3></div>
+            <div class="card-body">
+                <form data-json-form data-url="/api/admin/resources">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="code">Code</label>
+                            <input type="text" id="code" name="code" placeholder="CR-301" required>
+                        </div>
+                        <div class="field">
+                            <label for="name">Name</label>
+                            <input type="text" id="name" name="name" placeholder="Seminar Room 301" required>
+                        </div>
+                        <div class="field">
+                            <label for="resource_type">Type</label>
+                            <select id="resource_type" name="resource_type">
+                                <option value="CLASSROOM">Classroom</option>
+                                <option value="LABORATORY">Laboratory</option>
+                                <option value="PARKING_AREA">Parking area</option>
+                                <option value="SMART_DEVICE">Smart device</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="building">Building</label>
+                            <select id="building" name="building">
+                                {% for building in buildings %}
+                                    <option value="{{ building.code }}">{{ building.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="capacity">Capacity</label>
+                            <input type="number" id="capacity" name="capacity" value="40" min="0">
+                        </div>
+                        <div class="field">
+                            <label for="floor">Floor</label>
+                            <input type="number" id="floor" name="floor" value="1" min="0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Register resource</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Create a campus account</h3></div>
+            <div class="card-body">
+                <form data-json-form data-url="/api/admin/users">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="username">Username</label>
+                            <input type="text" id="username" name="username" required>
+                        </div>
+                        <div class="field">
+                            <label for="full_name">Full name</label>
+                            <input type="text" id="full_name" name="full_name" required>
+                        </div>
+                        <div class="field">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="field">
+                            <label for="role">Role</label>
+                            <select id="role" name="role">
+                                {% for code, label in role_labels.items() %}
+                                    <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="department">Department</label>
+                            <input type="text" id="department" name="department">
+                        </div>
+                        <div class="field">
+                            <label for="password">Password</label>
+                            <input type="text" id="password" name="password" value="campus123">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn" type="submit">Create account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Campus analytics</h3></div>
+            <div class="card-body">
+                <div class="stat-row"><span>Average utilisation</span><span>{{ data.analytics.average_utilisation }}%</span></div>
+                <div class="stat-row"><span>Availability rate</span><span>{{ data.analytics.availability_rate }}%</span></div>
+                <div class="stat-row"><span>Confirmed bookings</span><span>{{ data.analytics.confirmed_bookings }}</span></div>
+                <div class="stat-row"><span>Reserved hours</span><span>{{ data.analytics.booked_hours }}</span></div>
+                <div class="stat-row"><span>Open requests</span><span>{{ data.analytics.open_requests }}</span></div>
+                <div class="stat-row"><span>Breaching SLA</span><span>{{ data.analytics.breached_requests }}</span></div>
+                <div class="stat-row"><span>Open alerts</span><span>{{ data.analytics.alert_counts.OPEN }}</span></div>
+                <div class="stat-row"><span>Upcoming events</span><span>{{ data.analytics.upcoming_events }}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

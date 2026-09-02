@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Database (created automatically on first run)
+instance/
+*.db
+*.sqlite3
+
+# Test and tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors and operating system files
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
