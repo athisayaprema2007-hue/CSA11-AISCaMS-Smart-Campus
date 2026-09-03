@@ -16,6 +16,22 @@ Student: Athisaya U - Registration number 192571001
 
 ---
 
+## Submission files
+
+| Deliverable | File |
+| --- | --- |
+| Final assignment PDF | [`docs/report/Athisaya_U_CSA11_CO1-CO3_Assignment_AISCaMS.pdf`](docs/report/Athisaya_U_CSA11_CO1-CO3_Assignment_AISCaMS.pdf) |
+| Editable Word report | [`docs/report/Athisaya_U_CSA11_CO1-CO3_Assignment_AISCaMS.docx`](docs/report/Athisaya_U_CSA11_CO1-CO3_Assignment_AISCaMS.docx) |
+| UML evidence | [`docs/uml/`](docs/uml/) - ten black-and-white Umbrello exports |
+| Prototype evidence | [`docs/screenshots/`](docs/screenshots/) - seven application screens and the complete test run |
+
+The PDF is the submission-ready report. It retains the supplied assignment front
+matter and assessment rubric, contains 50 A4 pages, and traces the requirements
+to use cases, classes, implementation entry points, screenshots and automated
+verification evidence.
+
+---
+
 ## 1. Quick start (Windows)
 
 Double-click **`run.bat`**. It creates a virtual environment, installs the
@@ -139,7 +155,9 @@ AISCaMS/
 ├── docs/
 │   ├── IMPLEMENTATION_HANDOFF.md
 │   ├── test_results.txt
-│   └── screenshots/        eight screenshots of the running system
+│   ├── report/             final PDF and editable Word assignment
+│   ├── screenshots/        eight screenshots of the running system
+│   └── uml/                ten Umbrello UML evidence exports
 ├── instance/               SQLite database (created at runtime)
 ├── manage.py               database CLI
 ├── run.py                  development entry point
